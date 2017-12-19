@@ -24,7 +24,7 @@ defaults
 
 frontend ad-lantern
   bind *:80
-  bind *:443 ssl crt /etc/haproxy/certs/wildcard.ad-bundle.pem
+  bind *:443 ssl crt <%= @wildcardcertpath %>
   mode http
   reqadd X-Forwarded-Proto:\ https if { ssl_fc }
   reqadd X-Proto:\ https if { ssl_fc }
@@ -37,7 +37,7 @@ frontend ad-lantern
 {{- $keyPath := printf "service/%s/balance_addport" $path}}{{ $cPort:=(keyOrDefault $keyPath "") }}{{ if ne $cPort "" }}
 
 frontend {{$cPort}}
-  bind *:{{$cPort}} ssl crt /etc/haproxy/certs/wildcard.ad-bundle.pem
+  bind *:{{$cPort}} ssl crt <%= @wildcardcertpath %>
   mode http
   acl app{{$i}}_{{$cPort}} hdr(host) -i {{$path}}.<%= @target_domain %>:{{$cPort}}
   use_backend srvs_app{{$i}}_{{$cPort}} if app{{$i}}_{{$cPort}}{{end}}{{end}}{{end}}{{end}}
