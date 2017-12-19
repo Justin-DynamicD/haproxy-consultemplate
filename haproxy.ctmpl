@@ -1,0 +1,66 @@
+global
+  chroot  /var/lib/haproxy
+  daemon
+  group  haproxy
+  log  <%= @ipaddress %> local0
+  tune.ssl.default-dh-param 2048
+  maxconn  4096
+  pidfile  /var/run/haproxy.pid
+  stats  socket /var/lib/haproxy/stats
+  user  haproxy
+
+defaults
+  log  global
+  maxconn  8000
+  option  redispatch
+  retries  3
+  stats  enable
+  timeout  http-request 10s
+  timeout  queue 1m
+  timeout  connect 10s
+  timeout  client 1m
+  timeout  server 1m
+  timeout  check 10s
+
+frontend ad-lantern
+  bind *:80
+  bind *:443 ssl crt /etc/haproxy/certs/wildcard.ad-bundle.pem
+  mode http
+  reqadd X-Forwarded-Proto:\ https if { ssl_fc }
+  reqadd X-Proto:\ https if { ssl_fc }
+  redirect scheme https code 301 if !{ ssl_fc }
+  {{range $i,$a:=services}}{{$path:=.Name}}{{range .Tags}}{{if eq . "proxy"}}
+  acl app{{$i}} hdr(host) -i {{$path}}.<%= @target_domain %>{{end}}{{end}}{{end}}
+  {{range $i,$a:=services}}{{range .Tags}}{{if eq . "proxy"}}
+  use_backend srvs_app{{$i}} if app{{$i}}{{end}}{{end}}{{end}}
+{{- range $i,$a:=services}}{{$path:=.Name}}{{range .Tags}}{{if eq . "proxy"}}
+{{- $keyPath := printf "service/%s/balance_addport" $path}}{{ $cPort:=(keyOrDefault $keyPath "") }}{{ if ne $cPort "" }}
+
+frontend {{$cPort}}
+  bind *:{{$cPort}} ssl crt /etc/haproxy/certs/wildcard.ad-bundle.pem
+  mode http
+  acl app{{$i}}_{{$cPort}} hdr(host) -i {{$path}}.<%= @target_domain %>:{{$cPort}}
+  use_backend srvs_app{{$i}}_{{$cPort}} if app{{$i}}_{{$cPort}}{{end}}{{end}}{{end}}{{end}}
+{{- range $i,$a:=services}}{{$path:=.Name}}{{range .Tags}}{{if eq . "proxy"}}
+
+backend srvs_app{{$i}}
+  mode http
+  {{- $keyPath := printf "service/%s/balance_type" $path}}{{ $optionPath := printf "service/%s/balance_addserveroptions" $path}}
+  balance {{ keyOrDefault $keyPath "roundrobin" }}{{ if eq (keyOrDefault $keyPath "nope") "source" }}
+  hash-type consistent{{ end }}
+  option forwardfor{{ if ne (keyOrDefault $optionPath "") "" }}
+  {{ keyOrDefault $optionPath "" }}{{end}}
+  {{- $serviceName := printf "proxy.%s" $path}}{{ range $c,$d:=service $serviceName}}
+  server host{{$c}} {{.Address}}:{{.Port}}{{end}}{{end}}{{end}}{{end}}
+{{- range $i,$a:=services}}{{$path:=.Name}}{{range .Tags}}{{if eq . "proxy"}}
+{{- $keyPath := printf "service/%s/balance_addport" $path}}{{ $cPort:=(keyOrDefault $keyPath "") }}{{ if ne $cPort "" }}
+
+backend srvs_app{{$i}}_{{$cPort}}
+  mode http
+  {{- $keyPath := printf "service/%s/balance_type" $path}}{{ $optionPath := printf "service/%s/balance_addserveroptions" $path}}
+  balance {{ keyOrDefault $keyPath "roundrobin" }}{{ if eq (keyOrDefault $keyPath "nope") "source" }}
+  hash-type consistent{{ end }}
+  option forwardfor{{ if ne (keyOrDefault $optionPath "") "" }}
+  {{ keyOrDefault $optionPath "" }}{{end}}
+  {{- range $c,$d:=service $a.Name}}
+  server host{{$c}} {{.Address}}:{{$cPort}}{{end}}{{end}}{{end}}{{end}}{{end}}
