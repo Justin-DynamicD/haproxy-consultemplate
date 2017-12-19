@@ -8,6 +8,6 @@ This scans for all services with the tag "proxy" then adds a LB rule for them.  
 * consul kv store is searched for "service/< servicename >" for overriding values incase defaults arn't correct.
 * "balance_addport" is an addiional port number to LB (not on 443, but as passthrough)
 * "balance_type" overrides the default roundrobin mode (usually to "source")
-* "balance_addserveroptions" inserts said strign directly into the backend server options.  Catch-all for things like timeout
+* "balance_addserveroptions" inserts said string directly into the backend server options.  Catch-all for things like timeout
 
-Note as this is using consul, there are no checks generated, as it assumed your checks are dfined and monitored in consul itself.
+Note as this is using consul, there are no checks generated, as it assumed your checks are defined and monitored in consul itself.
